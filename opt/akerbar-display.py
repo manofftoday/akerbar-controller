@@ -96,12 +96,27 @@ def render_display():
     p_soil2, status_soil2 = calcular_porcentaje_y_status(raw_soil2)
     p_soil3, status_soil3 = calcular_porcentaje_y_status(raw_soil3)
 
+    cycle_mode = data.get("cycle_mode", "UNKNOWN")
+    cycle_state = data.get("cycle_state", data.get("fan_status", "UNKNOWN"))
+    next_change_ts = data.get("cycle_next_change")
+    next_on_ts = data.get("cycle_next_on")
+    cycle_line = ""
+
+    if cycle_mode == "AUTO" and next_on_ts is not None:
+        remaining = int(max(0, next_on_ts - time.time()))
+        minutes = remaining // 60
+        seconds = remaining % 60
+        cycle_line = f"AUTO: siguiente encendido en {minutes}m {seconds}s"
+
     # 6. Renderizar interfaz por consola (TTY)
     os.system('clear')
     print("==================================================")
     print(f"       {NEGRILLA}AKERBAR MONITOR - SALVIA DIVINORUM{RESET}        ")
     print("==================================================")
-    print(f"SISTEMA USB : {status_line}\n")
+    print(f"SISTEMA USB : {status_line}")
+    if cycle_line:
+        print(cycle_line)
+    print()
     
     print(f"{NEGRILLA}[SUELO]{RESET}")
     print(f"  - Maceta 1 (RAW: {int(raw_soil1):4}): {p_soil1:3}% Humedad  -> {status_soil1}")

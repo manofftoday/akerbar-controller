@@ -21,6 +21,10 @@ URL = f"https://api.telegram.org/bot{TOKEN}/"
 RAW_SECO = 850.0
 RAW_AGUA = 280.0
 
+
+def ensure_flag_dir():
+    os.makedirs(FLAG_DIR, exist_ok=True)
+
 def calcular_porcentaje_y_status(valor_analogico):
     if valor_analogico >= 1020:
         return 0, "❌ DESCONECTADO"
@@ -135,18 +139,27 @@ def procesar_comandos():
                         enviar_mensaje(chat_id, status_report)
 
                     elif text == "/on":
-                        if os.path.exists(FLAG_OFF): os.remove(FLAG_OFF)
-                        with open(FLAG_ON, "w") as f: f.write("1")
+                        ensure_flag_dir()
+                        if os.path.exists(FLAG_OFF):
+                            os.remove(FLAG_OFF)
+                        with open(FLAG_ON, "w") as f:
+                            f.write("1")
                         enviar_mensaje(chat_id, "🚀 *Akerbar: MODO MANUAL ON*\nEl HUB USB y el humidificador se han forzado a encendido continuo.")
                         
                     elif text == "/off":
-                        if os.path.exists(FLAG_ON): os.remove(FLAG_ON)
-                        with open(FLAG_OFF, "w") as f: f.write("1")
+                        ensure_flag_dir()
+                        if os.path.exists(FLAG_ON):
+                            os.remove(FLAG_ON)
+                        with open(FLAG_OFF, "w") as f:
+                            f.write("1")
                         enviar_mensaje(chat_id, "🛑 *Akerbar: MODO MANUAL OFF*\nEl sistema USB se ha cortado y queda apagado indefinidamente.")
                         
                     elif text == "/auto":
-                        if os.path.exists(FLAG_ON): os.remove(FLAG_ON)
-                        if os.path.exists(FLAG_OFF): os.remove(FLAG_OFF)
+                        ensure_flag_dir()
+                        if os.path.exists(FLAG_ON):
+                            os.remove(FLAG_ON)
+                        if os.path.exists(FLAG_OFF):
+                            os.remove(FLAG_OFF)
                         enviar_mensaje(chat_id, "🔄 *Akerbar: MODO AUTOMÁTICO*\nRestablecido el ciclo normal.")
                         
                     elif text in ["/start", "/help"]:

@@ -11,8 +11,9 @@ BAUD = 115200
 FLAG_ON  = "/usr/share/akerbar-controller/humidificador_on"
 FLAG_OFF = "/usr/share/akerbar-controller/humidificador_off"
 
-TIEMPO_APAGADO = 900
+# Ciclo automático: encender 5 minutos y apagar 25 minutos (30 minutos totales)
 TIEMPO_ENCENDIDO = 300
+TIEMPO_APAGADO = 1500
 
 CMD_ENCENDER = ["sudo", "uhubctl", "-l", "1-1", "-p", "2", "-a", "1"]
 CMD_APAGAR   = ["sudo", "uhubctl", "-l", "1-1", "-p", "2", "-a", "0"]
@@ -38,14 +39,17 @@ def guardar_json_atomico(data):
 
 
 def leer_serial(ser):
-    """Devuelve dict con última línea válida"""
-    if ser is None or not ser.in_waiting:
-        return None
+    """Devuelve dict con última línea válida y reconecta si hay error"""
+    if ser is None:
+        return None, None
 
     try:
+        if not ser.in_waiting:
+            return None, ser
+
         line = ser.readline().decode("utf-8", errors="ignore").strip()
         if not line or ":" not in line:
-            return None
+            return None, ser
 
         print(f"[RAW] {line}")
 
@@ -59,11 +63,15 @@ def leer_serial(ser):
             except ValueError:
                 pass
 
-        return data if data else None
+        return (data if data else None), ser
 
     except Exception as e:
         print(f"[SERIAL ERROR] {e}")
-        return None
+        try:
+            ser.close()
+        except Exception:
+            pass
+        return None, None
 
 
 print("==================================================")
@@ -73,6 +81,11 @@ print("==================================================")
 
 ser = None
 last_usb_state = None
+last_cycle_state = "OFF"
+last_cycle_change = time.time()
+cycle_mode = "AUTO"
+next_cycle_change = last_cycle_change + TIEMPO_APAGADO
+next_cycle_on = next_cycle_change
 
 while True:
     try:
@@ -88,12 +101,53 @@ while True:
                 print("[MANUAL] HUMIDIFICADOR ON")
                 controlar_usb(CMD_ENCENDER)
                 last_usb_state = "ON"
+            cycle_mode = "MANUAL"
+            next_cycle_change = None
+            next_cycle_on = None
 
         elif manual_off:
             if last_usb_state != "OFF":
                 print("[MANUAL] HUMIDIFICADOR OFF")
                 controlar_usb(CMD_APAGAR)
                 last_usb_state = "OFF"
+            cycle_mode = "MANUAL"
+            next_cycle_change = None
+            next_cycle_on = None
+
+        else:
+            cycle_mode = "AUTO"
+            # Ciclo automático: 5 minutos ON, 25 minutos OFF
+            elapsed = time.time() - last_cycle_change
+
+            if last_cycle_state == "ON":
+                if elapsed >= TIEMPO_ENCENDIDO:
+                    print("[AUTO] HUMIDIFICADOR OFF")
+                    controlar_usb(CMD_APAGAR)
+                    last_usb_state = "OFF"
+                    last_cycle_state = "OFF"
+                    last_cycle_change = time.time()
+                    next_cycle_change = last_cycle_change + TIEMPO_APAGADO
+                    next_cycle_on = next_cycle_change
+                elif last_usb_state != "ON":
+                    controlar_usb(CMD_ENCENDER)
+                    last_usb_state = "ON"
+                    next_cycle_change = last_cycle_change + TIEMPO_ENCENDIDO
+                    next_cycle_on = next_cycle_change + TIEMPO_APAGADO
+
+            else:
+                if elapsed >= TIEMPO_APAGADO:
+                    print("[AUTO] HUMIDIFICADOR ON")
+                    controlar_usb(CMD_ENCENDER)
+                    last_usb_state = "ON"
+                    last_cycle_state = "ON"
+                    last_cycle_change = time.time()
+                    next_cycle_change = last_cycle_change + TIEMPO_ENCENDIDO
+                    next_cycle_on = next_cycle_change + TIEMPO_APAGADO
+                elif last_usb_state != "OFF":
+                    controlar_usb(CMD_APAGAR)
+                    last_usb_state = "OFF"
+                    next_cycle_change = last_cycle_change + TIEMPO_APAGADO
+                    next_cycle_on = next_cycle_change
 
         # ----------------------------
         # LECTURA SERIAL (SIEMPRE)
@@ -107,7 +161,7 @@ while True:
                 time.sleep(1)
                 continue
 
-        new_data = leer_serial(ser)
+        new_data, ser = leer_serial(ser)
 
         if new_data:
 
@@ -122,6 +176,10 @@ while True:
             old.update(new_data)
             old["timestamp"] = time.time()
             old["fan_status"] = last_usb_state or "UNKNOWN"
+            old["cycle_mode"] = cycle_mode
+            old["cycle_state"] = last_cycle_state
+            old["cycle_next_change"] = next_cycle_change
+            old["cycle_next_on"] = next_cycle_on
 
             guardar_json_atomico(old)
 
@@ -129,4 +187,10 @@ while True:
 
     except Exception as e:
         print(f"[CRITICAL] {e}")
+        try:
+            if ser is not None:
+                ser.close()
+        except Exception:
+            pass
+        ser = None
         time.sleep(2)

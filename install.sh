@@ -1,9 +1,10 @@
-﻿#!/usr/bin/env bash
+﻿#!/usr/bin/bash
 set -euo pipefail
 
 INSTALL_ROOT="/opt/akerbar-controller"
 SHARE_DIR="/usr/share/akerbar-controller"
 SERVICE_DIR="/etc/systemd/system"
+LOCAL_SBIN="/usr/local/sbin"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_USER="${SUDO_USER:-$(id -un)}"
 TARGET_HOME=""
@@ -63,10 +64,13 @@ function install_prerequisites() {
 
 function deploy_files() {
   echo "[*] Deploying application files..."
-  mkdir -p "$INSTALL_ROOT" "$SHARE_DIR"
+  mkdir -p "$INSTALL_ROOT" "$SHARE_DIR" "$LOCAL_SBIN"
 
   cp -r "$SRC_DIR/opt/." "$INSTALL_ROOT/"
   chmod 755 "$INSTALL_ROOT"/*.py
+
+  cp "$SRC_DIR/opt/akerbar-control.py" "$LOCAL_SBIN/akerbar-control"
+  chmod 755 "$LOCAL_SBIN/akerbar-control"
 
   cp "$SRC_DIR/systemd/akerbar-controller.service" "$SERVICE_DIR/"
   cp "$SRC_DIR/systemd/akerbar-telegram.service" "$SERVICE_DIR/"
@@ -115,6 +119,8 @@ function configure_systemd() {
 function show_summary() {
   echo ""
   echo "Installation complete."
+  echo "  REBOOT your system to apply changes."
+  echo ""
   echo "  Installed files to: $INSTALL_ROOT"
   echo "  Shared state directory: $SHARE_DIR"
   echo "  Installed bash profile: $TARGET_HOME/.bash_profile"
