@@ -1,0 +1,14 @@
+[Unit]
+Description=Akerbar Telegram Bot Controller
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/share/akerbar-controller
+ExecStart=/usr/bin/python3 /opt/akerbar-controller/akerbar-telegram.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
